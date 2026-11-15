@@ -1,0 +1,13 @@
+"stratum","level","reference","or","ci_low","ci_high","p_value"
+"Infant sex","Female","Male",1.18,0.63,2.23,0.61
+"District","Jinja City","Jinja District",0.83,0.45,1.5,0.55
+"Subcounty","BUSEDDE","JINJA NORTH DIVISION",0.65,0.17,1.85,0.45
+"Subcounty","BUTAGAYA","JINJA NORTH DIVISION",1.11,0.38,2.76,0.83
+"Subcounty","BUWENGE","JINJA NORTH DIVISION",1.88,0.78,4.22,0.15
+"Subcounty","BUWENGE TOWN COUNCIL","JINJA NORTH DIVISION",1.13,0.22,3.63,0.86
+"Subcounty","BUYENGO TOWN COUNCIL","JINJA NORTH DIVISION",0.29,0.03,1.16,0.087
+"Subcounty","JINJA SOUTH DIVISION","JINJA NORTH DIVISION",0.24,0.03,0.94,0.039
+"Subcounty","KAKIRA TOWN COUNCIL","JINJA NORTH DIVISION",1.03,0.38,2.44,0.96
+"Subcounty","NAMAGERA TOWN COUNCIL","JINJA NORTH DIVISION",1.88,0.37,6.08,0.39
+"Folic acid in pregnancy","No","Yes",2.48,1.18,4.8,0.018
+"Babies in pregnancy","More than one baby","One baby",2.62,1.02,5.74,0.046

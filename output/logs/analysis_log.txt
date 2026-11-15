@@ -1,0 +1,134 @@
+
+##### Load_data 
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+
+Attaching package: ‘lubridate’
+
+The following objects are masked from ‘package:base’:
+
+    date, intersect, setdiff, union
+
+
+Attaching package: ‘janitor’
+
+The following objects are masked from ‘package:stats’:
+
+    chisq.test, fisher.test
+
+# A tibble: 1 × 5
+  births stillbirths neonatal_deaths stillbirth_or_death_per_1000 nmr_per_1000
+   <int>       <int>           <int>                        <dbl>        <dbl>
+1   4906          44             104                         30.2         21.4
+
+##### Forest_stillbirth 
+`height` was translated to `width`.
+`height` was translated to `width`.
+                   stratum                 level            reference   or
+1               Infant sex                Female                 Male 1.18
+2                 District            Jinja City       Jinja District 0.83
+3                Subcounty               BUSEDDE JINJA NORTH DIVISION 0.65
+4                Subcounty              BUTAGAYA JINJA NORTH DIVISION 1.11
+5                Subcounty               BUWENGE JINJA NORTH DIVISION 1.88
+6                Subcounty  BUWENGE TOWN COUNCIL JINJA NORTH DIVISION 1.13
+7                Subcounty  BUYENGO TOWN COUNCIL JINJA NORTH DIVISION 0.29
+8                Subcounty  JINJA SOUTH DIVISION JINJA NORTH DIVISION 0.24
+9                Subcounty   KAKIRA TOWN COUNCIL JINJA NORTH DIVISION 1.03
+10               Subcounty NAMAGERA TOWN COUNCIL JINJA NORTH DIVISION 1.88
+11 Folic acid in pregnancy                    No                  Yes 2.48
+12     Babies in pregnancy    More than one baby             One baby 2.62
+   ci_low ci_high p_value
+1    0.63    2.23   0.610
+2    0.45    1.50   0.550
+3    0.17    1.85   0.450
+4    0.38    2.76   0.830
+5    0.78    4.22   0.150
+6    0.22    3.63   0.860
+7    0.03    1.16   0.087
+8    0.03    0.94   0.039
+9    0.38    2.44   0.960
+10   0.37    6.08   0.390
+11   1.18    4.80   0.018
+12   1.02    5.74   0.046
+
+##### Forest_NMR 
+`height` was translated to `width`.
+`height` was translated to `width`.
+
+##### Forest_OR_firth 
+`height` was translated to `width`.
+`height` was translated to `width`.
+Excluded (unestimable CI): handwash_agent: sanitiser (vs. soap)
+`height` was translated to `width`.
+`height` was translated to `width`.
+Excluded (unestimable CI): handwash_agent: sanitiser (vs. soap)
+Excluded (unestimable CI): handwash_agent: sanitiser (vs. soap)
+Excluded (unestimable CI): handwash_agent: sanitiser (vs. soap)
+            group                                label       nmr_deaths_n            nmr_or   nmr_p       sbd_events_n            sbd_or   sbd_p
+1      Categories               BCG (vs. None / Blank)   0/21 vs 100/4525  1.02 (0.01-7.50) 9.9e-01   0/21 vs 144/4569  0.71 (0.01-5.19) 8.0e-01
+2      Categories        Other Item (vs. None / Blank)   3/67 vs 100/4525  2.39 (0.65-6.21) 1.7e-01   3/67 vs 144/4569  1.66 (0.46-4.29) 3.9e-01
+3      Categories        Breastmilk (vs. None / Blank)   0/61 vs 100/4525  0.36 (0.00-2.51) 3.9e-01   0/61 vs 144/4569  0.25 (0.00-1.74) 2.1e-01
+4      Categories Milk (Non-breast) (vs. None / Blank)  1/188 vs 100/4525  0.35 (0.04-1.29) 1.3e-01  1/188 vs 144/4569  0.25 (0.03-0.89) 2.9e-02
+5  Binary factors          any_eat_drink: Yes (vs. No)  4/337 vs 100/4525  0.59 (0.20-1.37) 2.5e-01  4/337 vs 144/4569  0.41 (0.14-0.95) 3.5e-02
+6  Binary factors        infant_sex: Male (vs. Female) 59/2472 vs 45/2390  1.27 (0.86-1.89) 2.3e-01 77/2490 vs 65/2410  1.15 (0.82-1.61) 4.1e-01
+7  Binary factors            has_latrine: Yes (vs. No)   73/4601 vs 8/111  0.20 (0.10-0.44) 3.3e-04   73/4601 vs 8/111  0.20 (0.10-0.44) 3.3e-04
+8  Binary factors        animals_present: Yes (vs. No) 39/2635 vs 42/2077  0.73 (0.47-1.13) 1.6e-01 39/2635 vs 42/2077  0.73 (0.47-1.13) 1.6e-01
+9  Binary factors          handwash_soap: Yes (vs. No)  67/4471 vs 14/241  0.24 (0.14-0.45) 3.4e-05  67/4471 vs 14/241  0.24 (0.14-0.45) 3.4e-05
+10 Binary factors   handwash_all_3_times: Yes (vs. No) 16/1591 vs 65/3121  0.49 (0.27-0.82) 5.9e-03 16/1591 vs 65/3121  0.49 (0.27-0.82) 5.9e-03
+11 Binary factors  protected_water_rainy: Yes (vs. No)   78/4564 vs 2/123  0.85 (0.29-4.12) 8.1e-01   78/4564 vs 2/123  0.85 (0.29-4.12) 8.1e-01
+12 Binary factors    protected_water_dry: Yes (vs. No)   73/4551 vs 8/133  0.24 (0.12-0.54) 1.3e-03   73/4551 vs 8/133  0.24 (0.12-0.54) 1.3e-03
+13     Categories             Borehole (vs. Tap_water) 24/1895 vs 47/2378  0.64 (0.39-1.04) 7.2e-02 24/1895 vs 47/2378  0.64 (0.39-1.04) 7.2e-02
+14     Categories  Harvested_rainwater (vs. Tap_water)    0/27 vs 47/2378  0.89 (0.01-6.54) 9.4e-01    0/27 vs 47/2378  0.89 (0.01-6.54) 9.4e-01
+15     Categories     Protected_spring (vs. Tap_water)   7/264 vs 47/2378  1.43 (0.60-2.94) 3.9e-01   7/264 vs 47/2378  1.43 (0.60-2.94) 3.9e-01
+16     Categories         Shallow_well (vs. Tap_water)    0/81 vs 47/2378  0.30 (0.00-2.13) 3.0e-01    0/81 vs 47/2378  0.30 (0.00-2.13) 3.0e-01
+17     Categories     unprotected_well (vs. Tap_water)    2/42 vs 47/2378  3.03 (0.61-9.36) 1.5e-01    2/42 vs 47/2378  3.03 (0.61-9.36) 1.5e-01
+18     Categories   Harvestedrain_water (vs. Borehole)    2/20 vs 29/2115 9.56 (1.85-32.16) 1.1e-02    2/20 vs 29/2115 9.56 (1.85-32.16) 1.1e-02
+19     Categories         Protectedwell (vs. Borehole)   7/309 vs 29/2115  1.75 (0.72-3.75) 2.0e-01   7/309 vs 29/2115  1.75 (0.72-3.75) 2.0e-01
+20     Categories           Shallowwell (vs. Borehole)    7/94 vs 29/2115 6.06 (2.46-13.24) 3.3e-04    7/94 vs 29/2115 6.06 (2.46-13.24) 3.3e-04
+21     Categories              Tapwater (vs. Borehole) 35/2107 vs 29/2115  1.21 (0.74-1.99) 4.4e-01 35/2107 vs 29/2115  1.21 (0.74-1.99) 4.4e-01
+22     Categories       unprotectedwell (vs. Borehole)    1/39 vs 29/2115 2.76 (0.30-10.92) 3.0e-01    1/39 vs 29/2115 2.76 (0.30-10.92) 3.0e-01
+23     Categories                     water (vs. soap)  14/241 vs 67/4461  4.15 (2.23-7.22) 3.5e-05  14/241 vs 67/4461  4.15 (2.23-7.22) 3.5e-05
+24     Categories                         Yes (vs. No)   73/4601 vs 8/111  0.20 (0.10-0.44) 3.3e-04   73/4601 vs 8/111  0.20 (0.10-0.44) 3.3e-04
+25     Categories                Poultry: Yes (vs. No) 22/1715 vs 59/2997  0.66 (0.39-1.05) 8.2e-02 22/1715 vs 59/2997  0.66 (0.39-1.05) 8.2e-02
+26     Categories                  Goats: Yes (vs. No) 12/1093 vs 69/3619  0.59 (0.31-1.04) 7.1e-02 12/1093 vs 69/3619  0.59 (0.31-1.04) 7.1e-02
+27     Categories                   Cows: Yes (vs. No)   9/636 vs 72/4076  0.84 (0.40-1.57) 6.0e-01   9/636 vs 72/4076  0.84 (0.40-1.57) 6.0e-01
+28     Categories          Before eating: Yes (vs. No) 54/2892 vs 27/1820  1.25 (0.80-2.01) 3.3e-01 54/2892 vs 27/1820  1.25 (0.80-2.01) 3.3e-01
+29     Categories        Before handling: Yes (vs. No) 47/3225 vs 34/1487  0.63 (0.41-0.99) 4.4e-02 47/3225 vs 34/1487  0.63 (0.41-0.99) 4.4e-02
+30     Categories    Before feeding baby: Yes (vs. No) 20/2201 vs 61/2511  0.37 (0.22-0.61) 4.4e-05 20/2201 vs 61/2511  0.37 (0.22-0.61) 4.4e-05
+
+##### Forest_stillbirth_or_death 
+`height` was translated to `width`.
+`height` was translated to `width`.
+
+##### Forest_plots 
+`height` was translated to `width`.
+`height` was translated to `width`.
+`height` was translated to `width`.
+`height` was translated to `width`.
+Excluded (unestimable CI): eat_drink_cat: BCG (vs. None / Blank); eat_drink_cat: Breastmilk (vs. None / Blank); rainy_water: Harvested_rainwater (vs. Tap_water); rainy_water: Shallow_well (vs. Tap_water); handwash_agent: sanitiser (vs. soap)
+`height` was translated to `width`.
+`height` was translated to `width`.
+Excluded (unestimable CI): eat_drink_cat: BCG (vs. None / Blank); eat_drink_cat: Breastmilk (vs. None / Blank); rainy_water: Harvested_rainwater (vs. Tap_water); rainy_water: Shallow_well (vs. Tap_water); handwash_agent: sanitiser (vs. soap)
+`height` was translated to `width`.
+`height` was translated to `width`.
+
+##### Barplot_NMR 
+
+##### Barplot_stillbirth_or_death 
+Warning messages:
+1: package ‘dplyr’ was built under R version 4.4.3 
+2: package ‘tidyr’ was built under R version 4.4.3 
+3: package ‘lubridate’ was built under R version 4.4.3 
+4: package ‘purrr’ was built under R version 4.4.3 
+5: package ‘ggplot2’ was built under R version 4.4.3 
+6: `geom_errorbarh()` was deprecated in ggplot2 4.0.0.
+ℹ Please use the `orientation` argument of `geom_errorbar()` instead. 

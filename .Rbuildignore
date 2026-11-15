@@ -1,0 +1,11 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^Data$
+^JinjaFiles$
+^BusogaFiles$
+^scripts$
+^analysis$
+^ODK_cred\.R$
+^odk_.*\.csv$
+^\.DS_Store$
+^LICENSE\.md$

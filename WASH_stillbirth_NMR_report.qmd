@@ -1,0 +1,479 @@
+---
+title: "Stillbirth, neonatal mortality and household WASH in Busoga"
+format:
+  html:
+    toc: true
+    embed-resources: true
+  pptx: default
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+library(ggplot2)
+library(knitr)
+library(logistf)
+```
+
+```{r}
+#| label: load-data
+#| include: false
+# Quarto renders from the folder of this file (the CONRIM project folder).
+# scripts/Load_data.R loads the survey data with the busoga package and builds
+# analysis_wash, nmr_wash, births_wash and the multi-category versions.
+invisible(capture.output(suppressMessages(source("scripts/Load_data.R"))))
+source("scripts/forest_helpers.R")
+```
+
+```{r}
+#| label: run-analyses
+#| include: false
+# Run the analysis scripts with print() switched off so only the objects are kept
+quiet_source <- function(file) {
+  env <- new.env(parent = globalenv())
+  env$print <- function(...) invisible(NULL)
+  suppressMessages(source(file, local = env))
+  env
+}
+
+sb_env  <- quiet_source("scripts/Forest_stillbirth.R")
+nmr_env <- quiet_source("scripts/Forest_NMR.R")
+or_env  <- quiet_source("scripts/Forest_OR_firth.R")
+```
+
+```{r}
+#| label: key-numbers
+#| include: false
+fmt_n <- function(x) format(x, big.mark = ",")
+
+wilson <- function(x, n, z = 1.96) {
+  p <- x / n
+  centre <- (p + z^2 / (2 * n)) / (1 + z^2 / n)
+  half   <- z * sqrt(p * (1 - p) / n + z^2 / (4 * n^2)) / (1 + z^2 / n)
+  list(low = (centre - half) * 1000, high = (centre + half) * 1000)
+}
+rate_txt <- function(x, n) {
+  w <- wilson(x, n)
+  sprintf("%.1f per 1,000 (95%% CI %.1f–%.1f)", x / n * 1000, w$low, w$high)
+}
+or_fmt <- function(or, lo, hi) sprintf("OR %.2f (95%% CI %.2f–%.2f)", or, lo, hi)
+
+# Population flow
+n_reports        <- nrow(merged_data)
+n_status_missing <- sum(merged_data$survival_trajectory == "ERROR: Missing First Visit Status")
+n_births         <- nrow(births_wash)
+n_other_excluded <- n_reports - n_status_missing - n_births
+n_sb             <- sum(births_wash$stillbirth)
+n_analysis       <- nrow(analysis_wash)
+n_lost_fu        <- n_births - n_analysis
+n_live           <- nrow(nmr_wash)
+n_deaths         <- sum(nmr_wash$neonatal_death_28d)
+
+sb_rate  <- rate_txt(n_sb, n_births)
+nmr_rate <- rate_txt(n_deaths, n_live)
+combined_rate <- sprintf("%.1f", (n_sb + n_deaths) / n_analysis * 1000)
+
+# Group rates and odds ratios used in the text
+sb_grp <- function(s, lvl) {
+  r <- filter(sb_env$sb_rows, stratum == .env$s, category == .env$lvl)
+  sprintf("%.1f per 1,000 (%d/%d)", r$rate, r$stillbirths, r$births)
+}
+nmr_grp <- function(var, lvl) {
+  r <- filter(nmr_env$nmr_rows, wash_var == .env$var, category == .env$lvl, sex == "All")
+  sprintf("%.1f per 1,000 (%d/%d)", r$nmr, r$deaths, r$n_births)
+}
+sb_or_txt <- function(s, lvl) {
+  r <- filter(sb_env$sb_or, stratum == .env$s, level == .env$lvl)
+  or_fmt(r$or, r$ci_low, r$ci_high)
+}
+nmr_or_txt <- function(d, var, lvl) {
+  r <- filter(d, variable == .env$var, level == .env$lvl)
+  or_fmt(r$or_est, r$conf.low, r$conf.high)
+}
+
+# Folic acid and neonatal death (the stillbirth side comes from Forest_stillbirth.R)
+folic_nmr <- nmr_wash %>%
+  filter(pregnancy_folic_uptake %in% c("Yes", "No")) %>%
+  mutate(folic = relevel(factor(pregnancy_folic_uptake), ref = "Yes"))
+folic_fit <- logistf(neonatal_death_28d ~ folic, data = folic_nmr)
+folic_nmr_or <- or_fmt(exp(folic_fit$coefficients[2]), exp(folic_fit$ci.lower[2]), exp(folic_fit$ci.upper[2]))
+folic_nmr_p  <- signif(folic_fit$prob[2], 2)
+folic_nmr_grp <- function(lvl) {
+  d <- filter(folic_nmr, pregnancy_folic_uptake == lvl)
+  sprintf("%.1f per 1,000 (%d/%d)", sum(d$neonatal_death_28d) / nrow(d) * 1000, sum(d$neonatal_death_28d), nrow(d))
+}
+
+# Missing data
+deaths_with_answer <- sapply(clean_wash_vars, function(v) sum(nmr_wash$neonatal_death_28d[!is.na(nmr_wash[[v]])]))
+n_deaths_latrine   <- deaths_with_answer[["has_latrine"]]
+n_blank_folic      <- sum(is.na(births_wash$pregnancy_folic_uptake) | births_wash$pregnancy_folic_uptake == "")
+n_blank_plurality  <- sum(is.na(births_wash$introduction_hh_twins) | births_wash$introduction_hh_twins == "")
+n_sb_wash_answers  <- sum(births_wash$stillbirth == 1 & !is.na(births_wash$has_latrine))
+n_shallow          <- sum(nmr_wash_cats$dry_water == "Shallowwell", na.rm = TRUE)
+n_unprotected_dry  <- sum(nmr_wash$protected_water_dry == "No", na.rm = TRUE)
+sex_row            <- filter(or_env$or_comparison, str_detect(label, "infant_sex"))
+```
+
+```{r}
+#| label: plot-helpers
+#| include: false
+# Compact forest plot of rates with Wilson CIs; n/N is added to each label.
+# d needs: panel (factor), label, events, n, rate, ci_low, ci_high
+rate_forest <- function(d, xlab, ref_line = NULL, color = "#1F78B4") {
+  d <- d %>%
+    mutate(row_id = paste(panel, sprintf("%s  (%d/%d)", label, events, n), sep = "||"))
+  d$row_id <- factor(d$row_id, levels = rev(unique(d$row_id)))
+
+  g <- ggplot(d, aes(x = rate, y = row_id)) +
+    geom_pointrange(aes(xmin = ci_low, xmax = ci_high), color = color, size = 0.35) +
+    scale_y_discrete(labels = function(x) sub(".*\\|\\|", "", x)) +
+    scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+    facet_grid(panel ~ ., scales = "free_y", space = "free_y") +
+    labs(x = xlab, y = NULL) +
+    theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      strip.text.y     = element_text(angle = 0, face = "bold", hjust = 0),
+      strip.background = element_rect(fill = "#F0F4F8", color = NA),
+      panel.spacing.y  = unit(0.5, "lines")
+    )
+  if (!is.null(ref_line)) {
+    g <- g + geom_vline(xintercept = ref_line, linetype = "dashed", color = "#D9534F", linewidth = 0.7)
+  }
+  g
+}
+```
+
+# Key findings
+
+## Summary
+
+- **Stillbirth rate:** `{r} sb_rate` among `{r} fmt_n(n_births)` births with a known first-visit status (`{r} n_sb` stillbirths).
+- **True neonatal mortality rate (NMR):** `{r} nmr_rate` among `{r} fmt_n(n_live)` live births with a known 28-day outcome (`{r} n_deaths` deaths). An earlier figure of `{r} combined_rate` per 1,000 counted stillbirths as neonatal deaths and is not an NMR.
+- **Folic acid:** both outcomes were higher without folic acid in pregnancy. Stillbirth: `{r} sb_grp("folic", "No")` without vs. `{r} sb_grp("folic", "Yes")` with. NMR: `{r} folic_nmr_grp("No")` without vs. `{r} folic_nmr_grp("Yes")` with.
+- **Household sanitation and handwashing:** the NMR was much higher without a latrine (`{r} nmr_grp("has_latrine", "No")` vs. `{r} nmr_grp("has_latrine", "Yes")`) and without soap or sanitiser (`{r} nmr_grp("handwash_soap", "No")` vs. `{r} nmr_grp("handwash_soap", "Yes")`).
+- **Dry-season water:** borehole users had the lowest odds of neonatal death; relative to borehole, shallow well had `{r} nmr_or_txt(or_env$or_nmr_cat, "dry_water", "Shallowwell")`.
+- **Caution:** these are unadjusted, exploratory associations from small groups, and only `{r} n_deaths_latrine` of `{r} n_deaths` neonatal deaths have WASH answers.
+
+# Data and populations
+
+## From reports to analysis populations
+
+```{r}
+#| label: population-flow
+#| echo: false
+tibble::tribble(
+  ~Step, ~Reports,
+  "Reports after merging first-visit and follow-up data", n_reports,
+  "Excluded: no first-visit vital status", -n_status_missing,
+  "Excluded: contradictory status or dates", -n_other_excluded,
+  "Births with a valid first-visit status (stillbirth analysis)", n_births,
+  "Excluded: alive at first visit, no 28-day follow-up", -n_lost_fu,
+  "Births with a known stillbirth-or-death outcome", n_analysis,
+  "Excluded: stillbirths", -n_sb,
+  "Live births with a known 28-day outcome (NMR analysis)", n_live
+) %>%
+  mutate(Reports = fmt_n(Reports)) %>%
+  kable(align = c("l", "r"))
+```
+
+## Headline rates
+
+```{r}
+#| label: headline-rates
+#| echo: false
+tibble::tribble(
+  ~Measure, ~Events, ~Denominator, ~`Rate per 1,000 (95% CI)`,
+  "Stillbirth rate", n_sb, n_births, sub(" per 1,000", "", rate_txt(n_sb, n_births)),
+  "Neonatal mortality rate (stillbirths excluded)", n_deaths, n_live, sub(" per 1,000", "", rate_txt(n_deaths, n_live)),
+  "Stillbirth or death by day 28 (not an NMR)", n_sb + n_deaths, n_analysis, sub(" per 1,000", "", rate_txt(n_sb + n_deaths, n_analysis))
+) %>%
+  mutate(across(c(Events, Denominator), fmt_n)) %>%
+  kable(align = c("l", "r", "r", "r"))
+```
+
+## Reading the headline rates
+
+The stillbirth rate uses all births with a known first-visit status as the denominator. The NMR uses live births whose survival to day 28 is known. The third row shows why an earlier figure was misleading: pooling stillbirths with neonatal deaths gives a rate that is neither a stillbirth rate nor an NMR.
+
+# Stillbirth
+
+## Stillbirth rate by characteristic
+
+```{r}
+#| label: fig-stillbirth-forest
+#| echo: false
+#| fig-width: 9.5
+#| fig-height: 5.4
+#| fig-alt: "Forest plot of the stillbirth rate per 1,000 total births by sex, district, subcounty, folic acid use and number of babies."
+sb_env$p_sb_forest
+```
+
+## Why stillbirth is not analysed by WASH
+
+None of the stillbirths has WASH answers (`{r} n_sb_wash_answers` of `{r} n_sb`), so stillbirth is examined by the characteristics recorded for every report instead.
+
+## Folic acid in pregnancy
+
+```{r}
+#| label: fig-folic-acid
+#| echo: false
+#| fig-width: 9.5
+#| fig-height: 3.6
+#| fig-alt: "Stillbirth rate and neonatal mortality rate by folic acid use in pregnancy, with 95% Wilson confidence intervals."
+folic_df <- bind_rows(
+  sb_env$sb_rows %>%
+    filter(stratum == "folic") %>%
+    transmute(outcome = "Stillbirth (per 1,000 total births)", label = category,
+              events = stillbirths, n = births, rate, ci_low, ci_high),
+  folic_nmr %>%
+    group_by(label = pregnancy_folic_uptake) %>%
+    summarise(events = sum(neonatal_death_28d), n = n(), .groups = "drop") %>%
+    mutate(
+      outcome = "Neonatal death (per 1,000 live births)",
+      rate    = events / n * 1000,
+      ci_low  = wilson(events, n)$low,
+      ci_high = wilson(events, n)$high
+    )
+) %>%
+  mutate(
+    label = factor(paste0("Folic acid: ", label, " (", events, "/", n, ")")),
+    outcome = factor(outcome, levels = c("Stillbirth (per 1,000 total births)", "Neonatal death (per 1,000 live births)"))
+  )
+
+ggplot(folic_df, aes(x = rate, y = label)) +
+  geom_pointrange(aes(xmin = ci_low, xmax = ci_high), color = "#1F78B4", size = 0.5) +
+  facet_wrap(~ outcome, ncol = 2, scales = "free") +
+  scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Rate per 1,000 (95% Wilson CI)", y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank(), strip.text = element_text(face = "bold"))
+```
+
+## Folic acid: what the data show
+
+Women who did not take folic acid in pregnancy had more stillbirths (`{r} sb_or_txt("Folic acid in pregnancy", "No")`) and more neonatal deaths (`{r} folic_nmr_or`, Firth p = `{r} folic_nmr_p`). The two associations point the same way, which makes a chance finding somewhat less likely, but folic acid use may mark access to antenatal care or wealth and this comparison is not adjusted for either.
+
+## More than one baby, and geography
+
+Pregnancies with more than one baby had a higher stillbirth rate: `{r} sb_grp("plurality", "More than one baby")` vs. `{r} sb_grp("plurality", "One baby")` (`{r} sb_or_txt("Babies in pregnancy", "More than one baby")`). The question was blank for `{r} fmt_n(n_blank_plurality)` births (the reason is not established), so this comparison rests on far fewer births than the others.
+
+Stillbirth rates varied across subcounties, from `{r} sb_grp("subcounty", "Jinja South Division")` in Jinja South Division to `{r} sb_grp("subcounty", "Buwenge")` in Buwenge, but most subcounty intervals are wide because there are few stillbirths in each (see the forest plot above). Infant sex and district showed no clear difference.
+
+# Neonatal mortality and WASH
+
+## NMR by WASH exposure
+
+```{r}
+#| label: fig-nmr-wash
+#| echo: false
+#| fig-width: 9.5
+#| fig-height: 6
+#| fig-alt: "Forest plot of the neonatal mortality rate per 1,000 live births by WASH exposure, with the overall rate as a dashed reference line."
+nmr_compact <- nmr_env$nmr_rows %>%
+  filter(sex == "All") %>%
+  transmute(
+    panel   = domain,
+    label   = if_else(category == "Overall", "All live births", category),
+    events  = deaths,
+    n       = n_births,
+    rate    = nmr,
+    ci_low,
+    ci_high
+  )
+
+rate_forest(nmr_compact, xlab = "Neonatal deaths per 1,000 live births (95% Wilson CI)",
+            ref_line = nmr_env$overall_nmr)
+```
+
+## Reading the NMR plot
+
+The dashed line is the overall NMR (`{r} sprintf("%.1f", nmr_env$overall_nmr)` per 1,000). Groups without a latrine, without soap or sanitiser, and with unprotected dry-season water sit well above it, but they are small groups with wide intervals.
+
+## Odds ratios (Firth)
+
+```{r}
+#| label: fig-nmr-or-binary
+#| echo: false
+#| fig-width: 9.5
+#| fig-height: 4.6
+#| fig-alt: "Forest plot of Firth odds ratios for neonatal death by binary WASH factors and infant sex."
+forest_table_plot(
+  or_env$or_nmr_bin,
+  title        = "Neonatal death by day 28 (stillbirths excluded)",
+  subtitle     = "Univariate odds ratios (95% Firth CI), log scale",
+  base_size    = 12,
+  events_label = "Deaths"
+)
+```
+
+## Sanitation and handwashing
+
+Odds of neonatal death were lower where:
+
+- the household had a latrine: `{r} nmr_or_txt(or_env$or_nmr_bin, "has_latrine", "Yes")`, based on only `{r} filter(nmr_env$nmr_rows, wash_var == "has_latrine", category == "No", sex == "All")$n_births` births without a latrine;
+- soap or sanitiser was used for handwashing: `{r} nmr_or_txt(or_env$or_nmr_bin, "handwash_soap", "Yes")`;
+- handwashing happened at all three key times: `{r} nmr_or_txt(or_env$or_nmr_bin, "handwash_all_3_times", "Yes")`;
+- handwashing before feeding the baby was reported: `{r} nmr_or_txt(or_env$or_nmr_cat, "hw_before_feeding", "Yes")`.
+
+Handwashing with water only had higher odds than soap (`{r} nmr_or_txt(or_env$or_nmr_cat, "handwash_agent", "water")`). Animals in the household and infant sex showed no clear association.
+
+# Water source
+
+## Dry season: borehole as the reference
+
+```{r}
+#| label: fig-water-source
+#| echo: false
+#| fig-width: 9.5
+#| fig-height: 5
+#| fig-alt: "Forest plot of Firth odds ratios for neonatal death by dry-season and rainy-season water source."
+water_or <- group_wash_domains(or_env$or_nmr_cat) %>%
+  filter(domain %in% c("Water Source (Dry)", "Water Source (Rainy)"), deaths > 0)
+
+forest_table_plot(
+  water_or,
+  label_col    = "clean_label",
+  facet_col    = "domain",
+  title        = "Water source and neonatal death by day 28",
+  subtitle     = "Univariate odds ratios (95% Firth CI), log scale",
+  base_size    = 12,
+  events_label = "Deaths"
+)
+```
+
+## What the dry-season result says
+
+Borehole users had the lowest observed odds of neonatal death among dry-season sources (the point estimates for all other sources are above 1). Relative to borehole, shallow well had `{r} nmr_or_txt(or_env$or_nmr_cat, "dry_water", "Shallowwell")` and harvested rainwater had `{r} nmr_or_txt(or_env$or_nmr_cat, "dry_water", "Harvestedrain_water")`, while tap water (`{r} nmr_or_txt(or_env$or_nmr_cat, "dry_water", "Tapwater")`) and protected well (`{r} nmr_or_txt(or_env$or_nmr_cat, "dry_water", "Protectedwell")`) did not differ clearly from borehole.
+
+Grouped as protected versus unprotected sources, protected dry-season water had `{r} nmr_or_txt(or_env$or_nmr_bin, "protected_water_dry", "Yes")`. The "unprotected" group is mostly shallow wells (`{r} n_shallow` of `{r} n_unprotected_dry` infants), so that binary result largely reflects shallow wells (`{r} nmr_grp("protected_water_dry", "No")` in the unprotected group).
+
+The rainy-season sources showed no clear differences, and two rainy-season groups had no deaths (shallow well and harvested rainwater), so they cannot be compared. The harvested-rainwater result in the dry season rests on only 2 deaths among 20 infants.
+
+# Comparing the two outcomes
+
+## Stillbirth-or-death vs. neonatal death
+
+```{r}
+#| label: fig-outcome-comparison
+#| echo: false
+#| fig-width: 9.5
+#| fig-height: 5.2
+#| fig-alt: "Forest plot comparing Firth odds ratios for the stillbirth-or-death outcome and the neonatal death outcome across binary WASH factors and infant sex."
+or_env$p_or_compare
+```
+
+## What changes when stillbirths are removed
+
+```{r}
+#| label: outcome-differences
+#| echo: false
+or_env$or_comparison %>%
+  filter(log_or_diff > 0.001) %>%
+  transmute(
+    Exposure                           = label,
+    `Neonatal death OR (95% CI)`       = nmr_or,
+    `Neonatal death p`                 = nmr_p,
+    `Stillbirth or death OR (95% CI)`  = sbd_or,
+    `Stillbirth or death p`            = sbd_p
+  ) %>%
+  kable(align = c("l", "r", "r", "r", "r"))
+```
+
+## Why the two outcomes differ
+
+Every WASH comparison is identical under the two outcomes except those involving what the infant was given to eat or drink, because stillbirths have no WASH answers except this one, which was recoded to "none" when blank. The apparent protective effect of "anything given to eat or drink" weakens once stillbirths are removed, which suggests it was largely an artefact of the blank-means-none coding for infants who were stillborn. The remaining WASH associations (latrine, soap, handwashing, dry-season water) are unaffected.
+
+Infant sex also moves slightly, from `{r} sex_row$sbd_or` to `{r} sex_row$nmr_or` for male vs. female, simply because the 44 stillbirths are no longer counted. Neither interval excludes 1.
+
+# Caveats
+
+## Interpreting these results
+
+- **Missing WASH answers:** only `{r} n_deaths_latrine` of `{r} n_deaths` neonatal deaths have a latrine answer, so the remaining deaths cannot contribute to the WASH comparisons.
+- **Follow-up:** `{r} fmt_n(n_lost_fu)` infants alive at the first visit have no 28-day follow-up and are excluded from the NMR. If their survival differs from those followed up, the NMR is biased.
+- **First-visit status:** `{r} fmt_n(n_status_missing)` of the `{r} fmt_n(n_reports)` reports have no first-visit vital status and were excluded. The reason is not established in the data.
+- **Small groups and sparse cells:** many exposure groups have fewer than 100 infants and a handful of deaths. Firth regression stabilises the estimates, but the intervals are wide.
+- **Unadjusted and uncorrected:** each association is univariate, about 30 comparisons were made without correction for multiple testing, and confounding by wealth, antenatal care or place of birth is possible.
+- **Blank answers:** folic acid was blank for `{r} n_blank_folic` births and the plurality question for `{r} fmt_n(n_blank_plurality)`; blanks are excluded from those comparisons.
+
+::: {.content-visible when-format="html"}
+
+# Appendix: full grouped odds-ratio plots
+
+## Neonatal death by WASH domain
+
+```{r}
+#| label: fig-appendix-nmr-grouped
+#| echo: false
+#| fig-width: 10
+#| fig-height: 9
+#| fig-alt: "Forest plot of Firth odds ratios for neonatal death for every WASH category, grouped by domain."
+or_env$p_nmr_or_grouped
+```
+
+## Stillbirth-or-death vs. neonatal death by WASH domain
+
+```{r}
+#| label: fig-appendix-compare-grouped
+#| echo: false
+#| fig-width: 10
+#| fig-height: 9
+#| fig-alt: "Forest plot comparing Firth odds ratios for the two outcomes for every WASH category, grouped by domain."
+or_env$p_or_compare_grouped
+```
+
+## Stillbirth Firth odds ratios
+
+```{r}
+#| label: appendix-stillbirth-or
+#| echo: false
+sb_env$sb_or %>%
+  transmute(
+    Characteristic = stratum,
+    Level          = level,
+    Reference      = reference,
+    `OR (95% CI)`  = sprintf("%.2f (%.2f–%.2f)", or, ci_low, ci_high),
+    p              = signif(p_value, 2)
+  ) %>%
+  kable(align = c("l", "l", "l", "r", "r"))
+```
+
+:::
+
+# Methods
+
+## Data sources
+
+Data come from two ODK Central forms for the CONRIM surveillance project in Busoga, Uganda, downloaded to `JinjaFiles/`: the short form completed at the first visit (`{r} fmt_n(nrow(short_raw))` rows) and the 28-day follow-up form (`{r} fmt_n(nrow(fu_raw))` rows). Each form was reduced to one row per participant (first visit: the earliest report with a known vital status; follow-up: the latest contact with a known vital status) and the two were joined by participant number.
+
+## Inclusion
+
+Reports with no first-visit vital status (`{r} fmt_n(n_status_missing)`) were excluded. A further `{r} n_other_excluded` reports were excluded because the vital status contradicted itself (dead at the first visit but alive at follow-up) or the date of death was before the date of birth or the survey. The remaining `{r} fmt_n(n_births)` births form the stillbirth population.
+
+## Outcome definitions
+
+- **Stillbirth:** an infant recorded as dead at the first visit with cause of death "Stillbirth".
+- **Neonatal death:** a live birth that died by day 28. Age at death comes from the dates of birth and death. Deaths without a recorded date were counted as neonatal if reported at the first visit or at follow-up within 28 days. Deaths after day 28 and infants confirmed alive at follow-up were counted as survivors.
+- **Unknown outcome:** infants alive at the first visit with no follow-up. They count as births for the stillbirth rate but are excluded from the NMR.
+- **Rates:** the stillbirth rate is stillbirths per 1,000 total births (live births plus stillbirths). The NMR is neonatal deaths per 1,000 live births with a known 28-day outcome. Both are crude, unadjusted rates.
+
+## Exposures
+
+Household WASH questions were recoded into yes/no variables: latrine; anything given to eat or drink (any item versus blank, with blank treated as none); animals in the household; soap or sanitiser used for handwashing; handwashing at all three key times (before eating, before handling and before feeding the baby); and protected water source in the rainy and dry seasons. Protected sources were borehole, tap water, protected spring, protected well and harvested rainwater (an assumption based on the WHO/UNICEF JMP "improved" definition); shallow well and unprotected well were unprotected. Detailed category versions of the water, handwashing, eating and drinking, animal and handwashing-timing variables were also analysed. Stillbirth was additionally examined by infant sex, district, subcounty, folic acid use in pregnancy and number of babies in the pregnancy (the variable `introduction_hh_twins`).
+
+## Statistical methods
+
+- **Rates:** per 1,000 with 95% Wilson score confidence intervals.
+- **Odds ratios:** univariate logistic regression for each exposure, fitted with Firth's penalized likelihood (`logistf`), with profile-penalized-likelihood confidence intervals and penalized likelihood-ratio p-values. Firth regression was used because of sparse cells and zero-event groups.
+- **Reference groups:** "No" for yes/no variables, female for sex, otherwise the largest group. Groups with fewer than 10 infants were dropped.
+- **Plots:** odds-ratio estimates whose intervals spanned more than a 1,000-fold range were treated as unestimable and omitted, and groups with no deaths are left out of the water-source plot.
+- **Not done:** no adjustment for confounding, no multivariable models and no correction for multiple comparisons.
+
+## Reproducibility
+
+The analyses are produced by `scripts/Load_data.R` (loading, cleaning, outcomes, exposures), `scripts/forest_helpers.R` (shared model-fitting and plotting functions), `Forest_stillbirth.R`, `Forest_NMR.R` and `Forest_OR_firth.R` (also in `scripts/`), which this report runs. Software: `{r} R.version.string`, `logistf` `{r} as.character(packageVersion("logistf"))`, `ggplot2` `{r} as.character(packageVersion("ggplot2"))`, `dplyr` `{r} as.character(packageVersion("dplyr"))`.
