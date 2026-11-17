@@ -17,6 +17,27 @@ library(purrr)
 library(ggplot2)
 library(knitr)
 library(logistf)
+
+# Stamp every ggplot with the generation date (small, bottom-right)
+gen_stamp <- paste("Generated", format(Sys.Date(), "%Y-%m-%d"))
+stamp_print <- function(orig) {
+  force(orig)
+  function(x, ...) {
+    orig(x, ...)
+    grid::grid.text(
+      gen_stamp,
+      x = grid::unit(1, "npc") - grid::unit(2, "mm"), y = grid::unit(1.5, "mm"),
+      just = c("right", "bottom"), gp = grid::gpar(fontsize = 5, col = "grey40")
+    )
+    invisible(x)
+  }
+}
+# ggplot2 >= 4.0 registers its print method under the S7 class name
+gg_class <- Find(\(cl) !is.null(getS3method("print", cl, optional = TRUE)), c("ggplot2::ggplot", "ggplot"))
+registerS3method("print", gg_class, stamp_print(getS3method("print", gg_class)), envir = asNamespace("ggplot2"))
+if (requireNamespace("patchwork", quietly = TRUE)) {
+  registerS3method("print", "patchwork", stamp_print(getS3method("print", "patchwork")), envir = asNamespace("patchwork"))
+}
 ```
 
 ```{r}
@@ -207,6 +228,7 @@ The stillbirth rate uses all births with a known first-visit status as the denom
 ```{r}
 #| label: fig-stillbirth-forest
 #| echo: false
+#| message: false
 #| fig-width: 9.5
 #| fig-height: 5.4
 #| fig-alt: "Forest plot of the stillbirth rate per 1,000 total births by sex, district, subcounty, folic acid use and number of babies."
@@ -264,6 +286,26 @@ Pregnancies with more than one baby had a higher stillbirth rate: `{r} sb_grp("p
 
 Stillbirth rates varied across subcounties, from `{r} sb_grp("subcounty", "Jinja South Division")` in Jinja South Division to `{r} sb_grp("subcounty", "Buwenge")` in Buwenge, but most subcounty intervals are wide because there are few stillbirths in each (see the forest plot above). Infant sex and district showed no clear difference.
 
+```{r}
+#| label: map-cases
+#| include: false
+map_env <- new.env(parent = globalenv())
+suppressMessages(source("scripts/Map_cases.R", local = map_env))
+n_map_cases <- nrow(filter(map_env$map_points, group %in% c("Death", "Stillbirth")))
+n_map_gps   <- sum(map_env$map_summary$n[map_env$map_summary$level == "GPS"])
+```
+
+```{r}
+#| label: fig-map-cases
+#| echo: false
+#| fig-width: 8
+#| fig-height: 7
+#| fig-cap: "Stillbirths and deaths against all births, Busoga. Most locations are approximate."
+map_env$case_map
+```
+
+The map shows `{r} n_map_cases` stillbirths and deaths (red and navy) over all births (grey) and births with a 28-day follow-up (blue). GPS was recorded and plausible for only `{r} n_map_gps` of the cases. The rest, and most births, are drawn at the median GPS of their village (parish if the village had none) with about 300 m of random jitter, so the clustering within villages is an artefact of that placement. Recorded GPS more than 20 km from its subcounty centre, or outside its subcounty polygon, was replaced the same way. The boundaries are 2019 geoBoundaries units. The two Jinja divisions are approximated from where the points fall, and Namagera Town Council has no boundary. Basemap: Esri, HERE, Garmin, OpenStreetMap contributors.
+
 # Neonatal mortality and WASH
 
 ## NMR by WASH exposure
@@ -299,6 +341,7 @@ The dashed line is the overall NMR (`{r} sprintf("%.1f", nmr_env$overall_nmr)` p
 ```{r}
 #| label: fig-nmr-or-binary
 #| echo: false
+#| message: false
 #| fig-width: 9.5
 #| fig-height: 4.6
 #| fig-alt: "Forest plot of Firth odds ratios for neonatal death by binary WASH factors and infant sex."
@@ -329,6 +372,7 @@ Handwashing with water only had higher odds than soap (`{r} nmr_or_txt(or_env$or
 ```{r}
 #| label: fig-water-source
 #| echo: false
+#| message: false
 #| fig-width: 9.5
 #| fig-height: 5
 #| fig-alt: "Forest plot of Firth odds ratios for neonatal death by dry-season and rainy-season water source."
